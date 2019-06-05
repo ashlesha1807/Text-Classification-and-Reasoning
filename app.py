@@ -1,12 +1,18 @@
-from flask import Flask,render_template,url_for,request
+from flask import Flask,render_template,url_for,request, send_from_directory
 from nlpModel import model
+import os
+
+IMAGES_FOLDER = os.path.join('static', 'images')
+
+app = Flask(__name__, static_url_path='/static')
+app.config['UPLOAD_FOLDER'] = IMAGES_FOLDER
 
 
-app = Flask(__name__)
 
 @app.route('/')
 def home():
-	return render_template('home.html')
+	img1_path = os.path.join(app.config['UPLOAD_FOLDER'], 'img1.jpg')
+	return render_template('dashboard.html', img1 = img1_path)
 
 @app.route('/predict',methods=['POST'])
 def predict():
@@ -18,4 +24,4 @@ def predict():
 
 
 if __name__ == '__main__':
-	app.run(debug=True)
+	app.run(debug=True, host='0.0.0.0', port=5000)

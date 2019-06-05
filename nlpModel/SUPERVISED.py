@@ -117,7 +117,7 @@ def read_tsv(tar, fname):
 
 if __name__ == "__main__":
     print("Reading data")
-    tarfname = "/Users/ashlesha_vaidya/Downloads/A2_256_sp19/data/sentiment.tar.gz"
+    tarfname = "../data/sentiment.tar.gz"
     sentiment = read_files(tarfname)
     print("\nTraining classifier")
     
