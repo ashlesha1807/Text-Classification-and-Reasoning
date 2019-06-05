@@ -1,6 +1,7 @@
 from flask import Flask,render_template,url_for,request, send_from_directory
+from nlpModel import final
 from nlpModel import model
-import os
+import os, json
 
 IMAGES_FOLDER = os.path.join('static', 'images')
 
@@ -18,8 +19,9 @@ def home():
 def predict():
 	if request.method == 'POST':
 		txt = request.form['comment']
-		results = model.predict(txt)
-	return render_template('result.html',results = results)
+		final.getResults(txt, 3)
+	# return render_template('dashboard.html', img1 = img1_path)
+	return json.dumps({})
 
 
 
