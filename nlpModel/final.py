@@ -1,30 +1,35 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
-#!/bin/python
+from sklearn.linear_model import LogisticRegression
+from sklearn import metrics
+import tarfile
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn import preprocessing
+from lime import lime_text
+from sklearn.pipeline import make_pipeline
+from lime.lime_text import LimeTextExplainer
+from matplotlib import pyplot as plt
+import re
+import pandas as pd
+from collections import defaultdict
+
 
 def train_classifier(X, y):
-    from sklearn.linear_model import LogisticRegression
     cls=LogisticRegression(random_state=0, max_iter=10000)
     cls.fit(X, y)
     return cls
 
 def evaluate(X, yt, cls, name='data'):
-    from sklearn import metrics
     yp = cls.predict(X)
     acc = metrics.accuracy_score(yt, yp)
     print("  Accuracy on %s  is: %s" % (name, acc))
 
-
-# In[4]:
-
-
-def read_files(tarfname):
-   
-    import tarfile
+def read_files(tarfname):   
     tar = tarfile.open(tarfname, "r:gz")
     trainname = "train.tsv"
     devname = "dev.tsv"
@@ -45,13 +50,10 @@ def read_files(tarfname):
     sentiment.dev_data, sentiment.dev_labels = read_tsv(tar, devname)
     print(len(sentiment.dev_data))
     print("-- transforming data and labels")
-    from sklearn.feature_extraction.text import CountVectorizer
     """" REPLACE COUNTS BY TFIDF OF WORDS"""
-    from sklearn.feature_extraction.text import TfidfVectorizer
     sentiment.tfidf_vect = TfidfVectorizer(max_df=0.8,sublinear_tf=True, use_idf=True)
     sentiment.trainX = sentiment.tfidf_vect.fit_transform(sentiment.train_data)
     sentiment.devX = sentiment.tfidf_vect.transform(sentiment.dev_data)
-    from sklearn import preprocessing
     sentiment.le = preprocessing.LabelEncoder()
     sentiment.le.fit(sentiment.train_labels)
     sentiment.target_labels = sentiment.le.classes_
@@ -61,8 +63,6 @@ def read_files(tarfname):
     return sentiment
 
 def write_pred_kaggle_file(unlabeled, cls, outfname, sentiment):
-    
-    
     yp = cls.predict(unlabeled.X)
     labels = sentiment.le.inverse_transform(yp)
     f = open(outfname, 'w')
@@ -73,15 +73,12 @@ def write_pred_kaggle_file(unlabeled, cls, outfname, sentiment):
         f.write(labels[i])
         f.write("\n")
     f.close()
-
-def read_unlabeled(tarfname, sentiment):
     
-    import tarfile
+def read_unlabeled(tarfname, sentiment):
     tar = tarfile.open(tarfname, "r:gz")
     class Data: pass
     unlabeled = Data()
     unlabeled.data = []
-    
     unlabeledname = "unlabeled.tsv"
     for member in tar.getmembers():
         if 'unlabeled.tsv' in member.name:
@@ -127,16 +124,10 @@ if __name__ == "__main__":
     evaluate(sentiment.devX, sentiment.devy, cls, 'dev')
     print("\nReading unlabeled data")
     unlabeled = read_unlabeled(tarfname, sentiment)
-    #write_pred_kaggle_file(unlabeled, cls, "/Users/ashlesha_vaidya/Desktop/cse 256/A2_256_sp19/data/sentimentpred.csv", sentiment)
-
-
-# In[5]:
-
-
+    
 """" HYPERPARAMTER TUNING"""
 
-from sklearn.linear_model import LogisticRegression
-from sklearn import metrics
+
 C=[0.01,0.1,1.0,10.0,100.0,200.0,1000.0,10000.0]
 penalty=['l1','l2']
 max_acc=0
@@ -166,93 +157,34 @@ acc = metrics.accuracy_score(sentiment.devy, yp)
 print("  FINAL Accuracy on DEV SET penalty= l2 C= 10 is: %s" % ( acc))
 
 
-# In[157]:
+def prediction(txt,num_features):
+    ##LIME
+    c = make_pipeline(sentiment.tfidf_vect, logistic)
+    class_names=['NEGATIVE','POSITIVE']
+    explainer = LimeTextExplainer(class_names=class_names)
+    exp = explainer.explain_instance(txt, c.predict_proba, num_features=num_features)
+    output="../outputs/output.html"
+    exp.save_to_file(output)
+    exp.as_pyplot_figure(label=1)
+    plt.savefig('../outputs/lime_explanation_graph.png')
+    
+    #LOGISTIC REGRESSION
+    list_of_words=re.sub("[^\w]", " ",  txt).split()
+    words_with_weights=defaultdict()
+    for word in list_of_words:
+        feats=sentiment.tfidf_vect.get_feature_names()
+        coefs=logistic.coef_[0]
+        if word in feats:
+            ind=feats.index(word)
+            words_with_weights[word]=coefs[ind]
+    
+    data=pd.DataFrame.from_dict(words_with_weights, orient='index')
+    data[0].plot(kind='barh',color=(data[0] > 0).map({True: 'g', False: 'r'}))
+    plt.savefig('../outputs/log_explanation_graph.png')
 
 
-#PLOTING THE PERFORMANCE OF THE MODEL AS A VARIATION OF HYPER-PARAMETERS
-
-import seaborn as sns
-sns.set(font_scale=2, style="white")
-data=pd.DataFrame(columns={'C','acc','penalty'})
-sns.set(rc={'figure.figsize':(11.7,8.27)})
-data['C']=[0.01,0.1,1.0,10.0,100.0,200.0,1000.0,10000.0,0.01,0.1,1.0,10.0,100.0,200.0,1000.0,10000.0]
-data['acc']=[50.0,56.77,75.99,76.63,74.01,74.67,75.32,75.32,74.23,75.32,79.25,81.00,78.38,78.16,77.29,76.63]
-#data['acc2']=[74.23,75.32,79.25,81.00,78.38,78.16,77.29,76.63]
-data['penalty']=['l1','l1','l1','l1','l1','l1','l1','l1','l2','l2','l2','l2','l2','l2','l2','l2']
-sns.barplot(x = "C", y = "acc", hue='penalty',data = data);
-
-
-# In[180]:
-
-
-##FEATURE NAMES AND WEIGHTS
-feats=sentiment.tfidf_vect.get_feature_names()
-coefs=logistic.coef_[0]
-ind=feats.index('cute')
-print coefs[ind]
-
-#MOST IMPORTANT FEATURES FOR THE NEGATIVE LABEL
-pairs=zip(coefs,feats)
-print sorted(pairs, reverse=True)[-3:]
-
-
-# In[183]:
-
-
-#MOST IMPORTTANT FEATURES FOR THE POSITIVE LABEL
-pairs=zip(coefs,feats)
-print sorted(pairs, reverse=True)[:3]
-
-
-# In[6]:
-
-
-from lime import lime_text
-
-
-# In[7]:
-
-
-from sklearn.pipeline import make_pipeline
-c = make_pipeline(sentiment.tfidf_vect, logistic)
-
-
-# In[18]:
-
-
-#TRYING OUT DIFFERENT DEV DATA USING LIME
-print (sentiment.dev_data[2])
-print(c.predict_proba([sentiment.dev_data[2]]))
-
-
-# In[22]:
-
-
-from lime.lime_text import LimeTextExplainer
-class_names=['NEGATIVE','POSITIVE']
-explainer = LimeTextExplainer(class_names=class_names)
-
-
-# In[59]:
-
-
-idx = 50
-#from pathlib 
-exp = explainer.explain_instance(sentiment.dev_data[idx], c.predict_proba, num_features=14)
-print (sentiment.dev_data[idx])
-print('Document id: %d' % idx)
-print('Probability =(POSITIVE)', c.predict_proba([sentiment.dev_data[idx]])[0,1])
-print('True class: %s' % sentiment.dev_labels[idx])
-print exp.as_list()
-output="/Users/ashlesha_vaidya/Desktop/cse 256/output.html"
-exp.save_to_file(output)
-
-
-
-# In[ ]:
-
-
-
+    
+    
 
 
 # In[ ]:
